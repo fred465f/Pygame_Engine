@@ -1,2 +1,2 @@
-Player_animations/idle 10/10 loop
-Player_animations/run 10/10 loop
+Player_animations/idle 15/15 loop
+Player_animations/run 7/7 loop

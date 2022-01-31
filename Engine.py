@@ -2,6 +2,7 @@
 from cmath import rect
 from dis import dis
 from msilib.schema import Class
+from re import A
 from tkinter.messagebox import NO
 import pygame, sys, random, noise, time, math
 
@@ -12,37 +13,54 @@ import pygame, sys, random, noise, time, math
 # Actor parent class for all moveable and interactable objects
 class Actor():
     # Constructor
-    def __init__(self, image_id, location, animation_file_id, colorkey = (255, 255, 255)):
+    def __init__(self, image_id, location, animation_file_id = None, colorkey = (255, 255, 255)):
         self.image_id = image_id
-        self.image = pygame.image.load(self.image_id + '.png')
+        self.image = pygame.image.load(self.image_id + '.png').convert()
         self.image.set_colorkey(colorkey)
         self.location = location
         self.animation_file_id = animation_file_id
         self.animation_frames = {}
-        self.animation_frame_data = {}
+        self.animation_database = {}
         self.action = None
+        self.frame = 0
+        self.flip = False
+
+        # Load animations for actor
+        if self.animation_file_id != None:
+            self.load_animation()
 
     # Function for rendering actor
     def render(self, display, scroll):
         if self.action != None:
-            pass
-        display.blit(self.image, (self.rect.x - scroll[0], self.rect.y - scroll[1]))
+            self.frame += 1
+            if self.frame >= len(self.animation_database[self.action][1]):
+                self.frame = 0
+            image_id = self.animation_database[self.action][1][self.frame]
+            self.image = self.animation_frames[image_id]
+        display.blit(pygame.transform.flip(self.image, self.flip, False), (self.location[0] - scroll[0], self.location[1] - scroll[1]))
 
     # Function for loading animatiion for actor (changing pygame.image as dictated by a .txt file)
     def load_animation(self):
         data = None
-        with open(self.tile_file, 'r', encoding = 'UTF8') as file:
+        with open(self.animation_file_id, 'r', encoding = 'UTF8') as file:
             data = file.read().split('\n')
         for row in data:
             anim_id, anim_frames, anim_type = row.split(' ')
+            anim_action = anim_id.split('/')[-1]
             animation_frame_data = []
             for i, frames in enumerate(anim_frames.split('/')):    
-                anim_image = pygame.image.load(anim_id + '_{}'.format(i)).convert()
+                anim_image = pygame.image.load(anim_id + '/' + anim_action + '_{}'.format(i) + '.png').convert()
                 anim_image.set_colorkey((255, 255, 255))
-                self.animation_frames[anim_id.split('/')[-1] + '_{}'.format(i)] = anim_image.copy()
-                for frame in frames:
-                    animation_frame_data.append(anim_id.split('/')[-1] + '_{}'.format(i))
-            self.animation_frame_data[anim_id.split('/')[-1]] = [anim_type, animation_frame_data]
+                self.animation_frames[anim_action + '_{}'.format(i)] = anim_image.copy()
+                for frame in range(int(frames)):
+                    animation_frame_data.append(anim_action + '_{}'.format(i))
+            self.animation_database[anim_action] = [anim_type, animation_frame_data]
+
+    # Change action
+    def change_action(self, action):
+        if self.action != action:
+            self.action = action
+            self.frame = 0
 
 # Parent class for all collectable; coins, stars, ...
 class Collectable(Actor):
@@ -154,9 +172,9 @@ class Level():
 # Character class
 class Character(Actor):
     # Constructor
-    def __init__(self, image_id, location, colorkey = (255, 255, 255)):
+    def __init__(self, image_id, location, animation_file_id = None, colorkey = (255, 255, 255)):
         # Default actor constructor
-        super().__init__(image_id, location, colorkey)
+        super().__init__(image_id, location, animation_file_id, colorkey)
 
         # Extra constructor for Character
         self.rect = pygame.Rect(*self.location, self.image.get_width(), self.image.get_height())
@@ -233,9 +251,9 @@ class Character(Actor):
 # that inherits functionality from the Actor class
 class Player(Character):
     # Constructor
-    def __init__(self, image_id, location, colorkey = (255, 255, 255)):
+    def __init__(self, image_id, location, animation_file_id = None, colorkey = (255, 255, 255)):
         # Default actor constructor
-        super().__init__(image_id, location, colorkey)
+        super().__init__(image_id, location, animation_file_id, colorkey)
 
         # Extra constructor for Player
         self.movement = [0, 0]
@@ -245,13 +263,31 @@ class Player(Character):
         self.air_timer = 0
         self.spawn_found = False
 
+    # Function for moving player
+    def move(self, tiles):
+        # Default function for moving characters
+        super().move(tiles)
+
+        # Extra functionality for moving player
+        if self.movement[0] > 0:
+            self.change_action('run')
+            self.flip = False
+        elif self.movement[0] == 0:
+            self.change_action('idle')
+        elif self.movement[0] < 0:
+            self.change_action('run')
+            self.flip = True
+
+        # Update position for animation
+        self.location = [self.rect.x, self.rect.y]
+
 # Enemy class is actually a child class of Character class
 # that inherits functionality from the Actor class
 class Enemy(Character):
     # Constructor
-    def __init__(self, image_id, location, colorkey = (255, 255, 255)):
+    def __init__(self, image_id, location, animation_file_id = None, colorkey = (255, 255, 255)):
         # Default actor constructor
-        super().__init__(image_id, location, colorkey)
+        super().__init__(image_id, location, animation_file_id, colorkey)
 
         # Extra constructor for Enemy
         self.movement = [0, 0]

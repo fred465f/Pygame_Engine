@@ -26,7 +26,8 @@ display = pygame.Surface(surface_size)
 background_image = pygame.image.load('background.png').convert()
 
 # Player instance
-player = Player('blob_self_made', [10 * tile_size, 9 * tile_size - 35])
+player = Player('Player_animations/idle/idle_0', [10 * tile_size, 9 * tile_size - 35], animation_file_id = "Player_animations/Animation_file.txt")
+player.action = 'idle'
 
 # Level instance
 level = Level(player, game_map_id, tile_size)
