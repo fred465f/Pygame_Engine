@@ -1,0 +1,2 @@
+Player_animations/idle 10/10 loop
+Player_animations/run 10/10 loop

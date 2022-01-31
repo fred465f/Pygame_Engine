@@ -1,0 +1,14 @@
+1 Tiles/GrassTop
+2 Tiles/GrassTopRight
+3 Tiles/GrassTopLeft
+4 Tiles/SingleGrassTop
+5 Tiles/SingleGrass
+6 Tiles/DirtMiddle
+7 Tiles/DirtRight
+8 Tiles/DirtLeft
+9 Tiles/DirtBottom
+10 Tiles/DirtBottomRight
+11 Tiles/DirtBottomLeft
+12 Tiles/GrassTopBottom
+13 Tiles/GrassTopBottomRight
+14 Tiles/GrassTopBottomLeft
