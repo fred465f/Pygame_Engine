@@ -1,10 +1,8 @@
 # Imports
-from cmath import rect
-from dis import dis
-from msilib.schema import Class
-from re import A
-from tkinter.messagebox import NO
+from matplotlib.pyplot import pause
 import pygame, sys, random, noise, time, math
+
+from sklearn.covariance import oas
 
 # ---------------------------------------------------------------------
 # Base parent classes
@@ -13,7 +11,7 @@ import pygame, sys, random, noise, time, math
 # Actor parent class for all moveable and interactable objects
 class Actor():
     # Constructor
-    def __init__(self, image_id, location, animation_file_id = None, colorkey = (255, 255, 255)):
+    def __init__(self, image_id, location, animation_file_id = None, sound_file = None, colorkey = (255, 255, 255)):
         self.image_id = image_id
         self.image = pygame.image.load(self.image_id + '.png').convert()
         self.image.set_colorkey(colorkey)
@@ -24,10 +22,31 @@ class Actor():
         self.action = None
         self.frame = 0
         self.flip = False
+        self.sound_file = sound_file
+        self.sound_database = {}
 
         # Load animations for actor
         if self.animation_file_id != None:
             self.load_animation()
+
+        # Load sounds for actor
+        if self.sound_file != None:
+            self.load_sounds()
+
+    # Funtion to load dictionary of type {'background_music': 'file1.wav', 'start_scene': 'file2.wav', ...}
+    # for all music files used ingame
+    def load_sounds(self):
+        data = None
+        with open(self.sound_file, 'r', encoding = 'UTF8') as file:
+            data = file.read().split('\n')
+        for row in data:
+            sound_id, sound_path = row.split(' ') 
+            self.sound_database[sound_id] = pygame.mixer.Sound(sound_path)
+
+    # Function to play sound from sound_database dictionary
+    def play_sound(self, sound_id):
+        if sound_id in self.sound_database.keys():
+            self.sound_database[sound_id].play()
 
     # Function for rendering actor
     def render(self, display, scroll):
@@ -79,14 +98,59 @@ class Wind():
 # Parent class for the game
 class Game():
     # Constructor
-    def __init__(self, levels, tile_file, ui_elements = None):
+    def __init__(self, levels, tile_file, music_file = None, ui_elements = None):
         self.levels = levels
         self.tile_file = tile_file
+        self.music_file = music_file
+        self.music_database = {}
+        self.music_loaded = False
         self.tile_indexs = {}
         self.ui_elements = ui_elements
         self.level_count = 0
         self.stars_collected = 0
 
+        # Load music for game
+        if self.music_file != None:
+            self.load_music()
+
+    # Funtion to load dictionary of type {'background_music': 'file1.wav', 'start_scene': 'file2.wav', ...}
+    # for all music files used ingame
+    def load_music(self):
+        data = None
+        with open(self.music_file, 'r', encoding = 'UTF8') as file:
+            data = file.read().split('\n')
+        for row in data:
+            music_id, music_path = row.split(' ') 
+            self.music_database[music_id] = music_path
+
+    # Function to play music from music_database dictionary
+    def play_music(self, music_id, repeat = -1):
+        if not self.music_loaded:
+            pygame.mixer.music.load(self.music_database[music_id])
+            self.music_loaded = True
+        else:
+            pygame.mixer.music.unload()
+            pygame.mixer.music.load(self.music_database[music_id])
+        pygame.mixer.music.play(repeat)
+
+    # Function to pause music
+    def pause_music(self, condition = True):
+        if self.music_loaded:
+            if condition:
+                pygame.mixer.music.pause()
+            else:
+                pygame.mixer.music.unpause()
+
+    # Function to set volume music
+    def volume_music(self, volume):
+        if self.music_loaded:
+            pygame.mixer.music.set_volume(volume)
+
+    # Function to fadeout music
+    def fadeout_music(self, ms = 1000):
+        if self.music_loaded:
+            pygame.mixer.music.fadeout(ms)
+    
     # Funtion to get dictionary of type {'1': pygame.image, '2': pygame.image, ...}
     # for all tiles used ingame
     def get_tile_indexs(self):

@@ -5,6 +5,9 @@ from Engine import *
 clock = pygame.time.Clock()
 from pygame.locals import *
 
+# Prepare mixer for sounds
+pygame.mixer.pre_init(44100, 16, 2, 512)
+
 # Initialize pygame
 pygame.init()
 
@@ -34,7 +37,7 @@ level = Level(player, game_map_id, tile_size)
 level.load_map()
 
 # Game instance
-game = Game([level], 'Tiles/tile_ids_file.txt')
+game = Game([level], 'Tiles/tile_ids_file.txt', music_file = 'Music/Music_file.txt')
 game.get_tile_indexs()
 level.tile_indexs = game.tile_indexs.copy()
 

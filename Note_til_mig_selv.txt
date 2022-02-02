@@ -1,0 +1,2 @@
+Lyd:
+ - Pygame understøtter kun 16-bit signed wav files (audacity - exporter)
