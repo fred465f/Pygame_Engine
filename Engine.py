@@ -1,8 +1,5 @@
 # Imports
-from matplotlib.pyplot import pause
 import pygame, sys, random, noise, time, math
-
-from sklearn.covariance import oas
 
 # ---------------------------------------------------------------------
 # Base parent classes
