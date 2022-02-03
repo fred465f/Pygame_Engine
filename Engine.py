@@ -1,5 +1,8 @@
 # Imports
+from inflection import titleize
 import pygame, sys, random, noise, time, math
+
+from sympy import re
 
 # ---------------------------------------------------------------------
 # Base parent classes
@@ -8,9 +11,10 @@ import pygame, sys, random, noise, time, math
 # Actor parent class for all moveable and interactable objects
 class Actor():
     # Constructor
-    def __init__(self, image_id, location, animation_file_id = None, sound_file = None, colorkey = (255, 255, 255)):
+    def __init__(self, image_id, location, animation_file_id = None, sound_file = None, tile_size = 16, colorkey = (255, 255, 255)):
+        self.tile_size = tile_size
         self.image_id = image_id
-        self.image = pygame.image.load(self.image_id + '.png').convert()
+        self.image = pygame.image.load(self.image_id).convert()
         self.image.set_colorkey(colorkey)
         self.location = location
         self.animation_file_id = animation_file_id
@@ -81,12 +85,13 @@ class Actor():
 # Parent class for all collectable; coins, stars, ...
 class Collectable(Actor):
     # Constructor
-    def __init__(self, image_id, location, colorkey = (255, 255, 255)):
+    def __init__(self, image_id, location, animation_file_id = None, sound_file = None, tile_size = 16, colorkey = (255, 255, 255)):
         # Default actor constructor
-        super().__init__(image_id, location, colorkey)
+        super().__init__(image_id, location, animation_file_id, sound_file, tile_size, colorkey)
 
         # Extra constructor for Collectable
-        self.rect = pygame.Rect(*self.location, self.image.get_width(), self.image.get_height())
+        rect_location = [self.location[0] + int(self.tile_size/4), self.location[1] + int(self.tile_size/4)]
+        self.rect = pygame.Rect(rect_location, int(self.tile_size/4), int(self.tile_size/4))
 
 # Parent class for all objects affected by wind; grass, particles, ...
 class Wind():
@@ -105,6 +110,7 @@ class Game():
         self.ui_elements = ui_elements
         self.level_count = 0
         self.stars_collected = 0
+        self.screen_shake_counter = 0
 
         # Load music for game
         if self.music_file != None:
@@ -150,13 +156,15 @@ class Game():
     
     # Funtion to get dictionary of type {'1': pygame.image, '2': pygame.image, ...}
     # for all tiles used ingame
-    def get_tile_indexs(self):
+    def get_tile_indexs(self, colorkey = (255, 255, 255)):
         data = None
         with open(self.tile_file, 'r', encoding = 'UTF8') as file:
             data = file.read().split('\n')
         for row in data:
-            id, image_id = row.split(' ') 
-            self.tile_indexs[id] = pygame.image.load(image_id + '.png').convert()
+            id, image_id, type = row.split(' ') 
+            tile_img = pygame.image.load(image_id + '.png').convert()
+            tile_img.set_colorkey(colorkey)
+            self.tile_indexs[id] = [tile_img, type]
 
     # Function to get the next level of the game
     def next_level(self):
@@ -175,31 +183,42 @@ class Game():
         if self.ui_elements != None:
             pass
 
+    # Function to produce screen shake
+    def screen_shake(self):
+        if self.screen_shake_counter:
+            self.screen_shake_counter -= 1
+            return [random.randint(0, 8) - 4, random.randint(0, 8) - 4]
+
 # Parent class for all levels
 class Level():
     # Constructor
-    def __init__(self, player, game_map_id, tile_size, tile_indexs = None, enemies = None, collectables = None, player_spawn_position = None):
+    def __init__(self, player, tile_size, game_map_id = None, tile_indexs = None, background_id = None, enemies = None, collectables = None, player_spawn_position = None):
         self.player = player
         self.player_spawn_position = player_spawn_position
-        self.game_map_id = game_map_id + '.txt'
+        self.game_map_id = game_map_id
         self.game_map = []
         self.tile_indexs = tile_indexs
         self.tile_size = tile_size
         self.enemies = enemies
         self.collectables = collectables
+        self.background_id = background_id
+        self.background_elements = []
+
+        # Load game map if given
+        if self.game_map_id != None:
+            self.load_map()
+        
+        # Load background elements
+        if self.background_id != None:
+            self.load_background()
 
     # Function for loading map
     def load_map(self):
-        if self.game_map == []:
-            data = None
-            with open(self.game_map_id, 'r', encoding = 'UTF8') as file:
-                data = file.read().split('\n')
-            for row in data:
-                self.game_map.append(row.split('\t'))            
-        else:
-            print("Map already loaded")
-            print('\n\n\n' + str(self.game_map) + '\n\n\n')
-            self.game_map = None
+        data = None
+        with open(self.game_map_id, 'r', encoding = 'UTF8') as file:
+            data = file.read().split('\n')
+        for row in data:
+            self.game_map.append(row.split('\t'))            
 
     # Function for rendering map
     def render_map(self, display, col_with, scroll):
@@ -210,12 +229,32 @@ class Level():
                     if tile != '0':
                         x_pos = tile_nr * self.tile_size
                         y_pos = row_nr * self.tile_size
-                        display.blit(self.tile_indexs[tile], (x_pos - scroll[0], y_pos - scroll[1]))
+                        display.blit(self.tile_indexs[tile][0], (x_pos - scroll[0], y_pos - scroll[1]))
                     if tile in col_with:
-                        tile_rects.append(pygame.Rect(x_pos, y_pos, self.tile_size, self.tile_size))
+                        tile_rects.append([pygame.Rect(x_pos, y_pos, self.tile_size, self.tile_size), self.tile_indexs[tile][1]])
             return tile_rects
         else:
             print("Map not yet loaded")
+
+    # Function for loading background elements
+    def load_background(self, colorkey = (255, 255, 255)):
+        data = None
+        with open(self.background_id, 'r', encoding = 'UTF8') as file:
+            data = file.read().split('\n')
+        for row in data:
+            id, loc, parallax = row.split(' ')
+            bg_img = pygame.image.load(id + '.png').convert()
+            bg_img.set_colorkey(colorkey)
+            self.background_elements.append([bg_img, [int(i) for i in loc.split(',')], float(parallax)])
+
+    # Function for rendering background elements
+    def render_background(self, display, scroll):
+        if self.background_elements != []:
+            for bg_element in self.background_elements:
+                bg_img = bg_element[0]
+                bg_loc = bg_element[1]
+                bg_parallax = bg_element[2]
+                display.blit(bg_img, (bg_loc[0] - scroll[0] * bg_parallax, bg_loc[1] - scroll[1] * bg_parallax))
 
     # Function for rendering actors
     def render_actors(self, display):
@@ -233,9 +272,9 @@ class Level():
 # Character class
 class Character(Actor):
     # Constructor
-    def __init__(self, image_id, location, animation_file_id = None, colorkey = (255, 255, 255)):
+    def __init__(self, image_id, location, animation_file_id = None, sound_file = None, tile_size = 16, colorkey = (255, 255, 255)):
         # Default actor constructor
-        super().__init__(image_id, location, animation_file_id, colorkey)
+        super().__init__(image_id, location, animation_file_id, sound_file, tile_size, colorkey)
 
         # Extra constructor for Character
         self.rect = pygame.Rect(*self.location, self.image.get_width(), self.image.get_height())
@@ -275,9 +314,18 @@ class Character(Actor):
         # Keep track of collision types
         collision_types = {'top': False, 'bottom': False, 'right': False, 'left': False}
 
+        # Normal tiles
+        normal_tiles = [tile[0] for tile in tiles if tile[1] == '0']
+
+        # Ramp tiles
+        ramps_rect = [ramp[0] for ramp in tiles if ramp[1] != '0']
+        ramps_type = [ramp[1] for ramp in tiles if ramp[1] != '0']
+
+        # Collision with normal tiles
+        # ------------------------------------------------
         # Find collisions in x-direction
         self.rect.x += self.movement[0]
-        hit_list = self.collision_test(tiles)
+        hit_list = self.collision_test(normal_tiles)
         for tile in hit_list:
             if self.movement[0] > 0:
                 self.rect.right = tile.left
@@ -288,7 +336,7 @@ class Character(Actor):
 
         # Find collisions in y-direction
         self.rect.y += self.movement[1]
-        hit_list = self.collision_test(tiles)
+        hit_list = self.collision_test(normal_tiles)
         for tile in hit_list:
             if self.movement[1] > 0:
                 self.rect.bottom = tile.top
@@ -296,6 +344,33 @@ class Character(Actor):
             elif self.movement[1] < 0:
                 self.rect.top = tile.bottom
                 collision_types['top'] = True
+
+        # Collision with normal tiles
+        # ------------------------------------------------
+        for ramp, type in zip(ramps_rect, ramps_type):
+            if self.rect.colliderect(ramp):
+                # Relative x-position between player and ramp
+                rel_x = self.rect.x - ramp.x
+
+                # Get height at player's position based on the type of ramp
+                if type == '1':
+                    pos_height = rel_x + self.rect.width
+                elif type == '2':
+                    pos_height = self.tile_size - rel_x
+
+                # Constraints
+                pos_height = min(pos_height, self.tile_size)
+                pos_height = max(pos_height, 0)
+
+                # Set target y-position
+                target_y = ramp.y + self.tile_size - pos_height
+
+                # Check if player collided with ramp
+                if self.rect.bottom > target_y:
+                    # Adjust player height
+                    self.rect.bottom = target_y
+                    self.location[1] = self.rect.y
+                    collision_types['bottom'] = True
 
         # Make player fall down if they hit a ceiling
         if collision_types['top']:
@@ -312,9 +387,9 @@ class Character(Actor):
 # that inherits functionality from the Actor class
 class Player(Character):
     # Constructor
-    def __init__(self, image_id, location, animation_file_id = None, colorkey = (255, 255, 255)):
+    def __init__(self, image_id, location, animation_file_id = None, sound_file = None, tile_size = 16, colorkey = (255, 255, 255)):
         # Default actor constructor
-        super().__init__(image_id, location, animation_file_id, colorkey)
+        super().__init__(image_id, location, animation_file_id, sound_file, tile_size, colorkey)
 
         # Extra constructor for Player
         self.movement = [0, 0]
@@ -346,9 +421,9 @@ class Player(Character):
 # that inherits functionality from the Actor class
 class Enemy(Character):
     # Constructor
-    def __init__(self, image_id, location, animation_file_id = None, colorkey = (255, 255, 255)):
+    def __init__(self, image_id, location, animation_file_id = None, sound_file = None, tile_size = 16, colorkey = (255, 255, 255)):
         # Default actor constructor
-        super().__init__(image_id, location, animation_file_id, colorkey)
+        super().__init__(image_id, location, animation_file_id, sound_file, tile_size, colorkey)
 
         # Extra constructor for Enemy
         self.movement = [0, 0]
@@ -364,8 +439,8 @@ class Enemy(Character):
 class Coin(Collectable):
     pass
 
-# Star class
-class Star(Collectable):
+# Song class
+class Song(Collectable):
     pass
 
 

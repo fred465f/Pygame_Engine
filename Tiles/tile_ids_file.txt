@@ -1,14 +1,16 @@
-1 Tiles/GrassTop
-2 Tiles/GrassTopRight
-3 Tiles/GrassTopLeft
-4 Tiles/SingleGrassTop
-5 Tiles/SingleGrass
-6 Tiles/DirtMiddle
-7 Tiles/DirtRight
-8 Tiles/DirtLeft
-9 Tiles/DirtBottom
-10 Tiles/DirtBottomRight
-11 Tiles/DirtBottomLeft
-12 Tiles/GrassTopBottom
-13 Tiles/GrassTopBottomRight
-14 Tiles/GrassTopBottomLeft
+1 Tiles/GrassTop 0
+2 Tiles/GrassTopRight 0
+3 Tiles/GrassTopLeft 0
+4 Tiles/SingleGrassTop 0
+5 Tiles/SingleGrass 0
+6 Tiles/DirtMiddle 0
+7 Tiles/DirtRight 0
+8 Tiles/DirtLeft 0
+9 Tiles/DirtBottom 0
+10 Tiles/DirtBottomRight 0
+11 Tiles/DirtBottomLeft 0
+12 Tiles/GrassTopBottom 0
+13 Tiles/GrassTopBottomRight 0
+14 Tiles/GrassTopBottomLeft 0
+15 Tiles/GrassRight 2
+16 Tiles/GrassLeft 1
