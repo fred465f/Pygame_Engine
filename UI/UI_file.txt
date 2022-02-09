@@ -1,0 +1,7 @@
+coin Collectables/coin_red.png
+1_song Collectables/1_song.png
+2_song Collectables/2_song.png
+3_song Collectables/3_song.png
+1_song_ui Collectables/1_song_ui.png
+2_song_ui Collectables/2_song_ui.png
+3_song_ui Collectables/3_song_ui.png

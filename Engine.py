@@ -1,4 +1,5 @@
 # Imports
+from socket import gaierror
 from inflection import titleize
 import pygame, sys, random, noise, time, math
 
@@ -91,7 +92,7 @@ class Collectable(Actor):
 
         # Extra constructor for Collectable
         rect_location = [self.location[0] + int(self.tile_size/4), self.location[1] + int(self.tile_size/4)]
-        self.rect = pygame.Rect(rect_location, int(self.tile_size/4), int(self.tile_size/4))
+        self.rect = pygame.Rect(*rect_location, int(self.tile_size/4), int(self.tile_size/4))
 
 # Parent class for all objects affected by wind; grass, particles, ...
 class Wind():
@@ -100,21 +101,36 @@ class Wind():
 # Parent class for the game
 class Game():
     # Constructor
-    def __init__(self, levels, tile_file, music_file = None, ui_elements = None):
+    def __init__(self, levels, tile_file, music_file = None, ui_file = None, colorkey = (255, 255, 255), songs_collected = None):
+        self.colorkey = colorkey
         self.levels = levels
         self.tile_file = tile_file
         self.music_file = music_file
         self.music_database = {}
         self.music_loaded = False
         self.tile_indexs = {}
-        self.ui_elements = ui_elements
+        self.ui_file = ui_file
+        self.ui_images = {}
+        self.ui_rects = {}
         self.level_count = 0
-        self.stars_collected = 0
+        self.coins_collected = 0
+        self.songs_collected = songs_collected
+        self.songs_lst = ['1_song', '2_song', '3_song']
+        self.song_ui_momentum = 5
+        self.song_ui_height = 200
+        self.song_ui_key_pressed = False
+        self.song_ui_selected = 0
+        self.songs_count = 0
         self.screen_shake_counter = 0
+        self.surf_size = [300, 200]
 
         # Load music for game
         if self.music_file != None:
             self.load_music()
+
+        # Load ui images for game
+        if self.ui_file != None:
+            self.load_ui_images()
 
     # Funtion to load dictionary of type {'background_music': 'file1.wav', 'start_scene': 'file2.wav', ...}
     # for all music files used ingame
@@ -178,10 +194,40 @@ class Game():
             self.level_count -= 1
         return self.levels[self.level_count]
 
+    # Funtion to load dictionary of type {'ui_image': pygame.image, ...}
+    def load_ui_images(self):
+        data = None
+        with open(self.ui_file, 'r', encoding = 'UTF8') as file:
+            data = file.read().split('\n')
+        for row in data:
+            id, path = row.split(' ')
+            img = pygame.image.load(path).convert()
+            img.set_colorkey(self.colorkey)
+            self.ui_images[id] = img
+
     # Function to render the UI
-    def render_ui(self):
-        if self.ui_elements != None:
-            pass
+    def render_ui(self, display, font):
+        # Render different ui elements
+        if self.ui_images != None:
+            # Render coins collected
+            scoretext = font.render(str(self.coins_collected), 1, (0,0,0))
+            display.blit(scoretext, (15, 3))
+            display.blit(self.ui_images['coin'], (0, 0))
+
+            # Render songs collected
+            songs = [self.ui_images[song + '_ui'] for song in self.songs_lst if self.songs_collected[song]]
+            if len(songs) != 0:
+                for i, song in enumerate(songs):
+                    offset = 0
+                    if i == self.song_ui_selected:
+                        offset = 5
+                    loc = [int(self.surf_size[0]/(len(songs) + 1) * (i + 1)) - int(song.get_width()/2), self.song_ui_height - offset]
+                    display.blit(song, loc)
+
+                if (self.song_ui_height >= (self.surf_size[1] - int(songs[0].get_height()) + 5)) and self.song_ui_key_pressed:
+                    self.song_ui_height -= self.song_ui_momentum
+                elif (self.song_ui_height <= 200) and (not self.song_ui_key_pressed):
+                    self.song_ui_height += self.song_ui_momentum
 
     # Function to produce screen shake
     def screen_shake(self):
@@ -257,12 +303,29 @@ class Level():
                 display.blit(bg_img, (bg_loc[0] - scroll[0] * bg_parallax, bg_loc[1] - scroll[1] * bg_parallax))
 
     # Function for rendering actors
-    def render_actors(self, display):
+    def render_actors(self, display, scroll):
         pass
 
     # Function for rendering collectables
-    def render_collectables(self, display):
-        pass
+    def render_collectables(self, display, scroll, rect):
+        # Check for collision with rect, if true, remove collectable
+        collected = 0
+        song = None
+        for c in self.collectables:
+            if c.rect.colliderect(rect):
+                if isinstance(c, Coin):
+                    self.collectables.remove(c)
+                    collected += 1
+                elif isinstance(c, Song):
+                    song = c.name
+                    self.collectables.remove(c)
+
+        # Render collectables
+        for c in self.collectables:
+            c.render(display, scroll)
+
+        # Return collected collectables
+        return collected, song
 
 
 # ---------------------------------------------------------------------
@@ -417,6 +480,42 @@ class Player(Character):
         # Update position for animation
         self.location = [self.rect.x, self.rect.y]
 
+# Pet class is actually a child class of Character class
+# that inherits functionality from the Actor class
+class Pet(Character):
+    # Constructor
+    def __init__(self, image_id, location, animation_file_id = None, sound_file = None, tile_size = 16, colorkey = (255, 255, 255)):
+        # Default actor constructor
+        super().__init__(image_id, location, animation_file_id, sound_file, tile_size, colorkey)
+
+        # Extra constructor for Pet
+        self.movement = [0, 0]
+        self.y_momentum = 0
+        self.moving_left = False
+        self.moving_right = False
+        self.air_timer = 0
+        self.spawn_found = False
+
+    # Function for moving pet
+    def move(self, tiles):
+        # Default function for moving characters
+        super().move(tiles)
+
+        # Extra functionality for moving pet
+        """
+        if self.movement[0] > 0:
+            self.change_action('run')
+            self.flip = False
+        elif self.movement[0] == 0:
+            self.change_action('idle')
+        elif self.movement[0] < 0:
+            self.change_action('run')
+            self.flip = True
+        """
+
+        # Update position for animation
+        self.location = [self.rect.x, self.rect.y]
+
 # Enemy class is actually a child class of Character class
 # that inherits functionality from the Actor class
 class Enemy(Character):
@@ -437,11 +536,20 @@ class Enemy(Character):
 
 # Coin class
 class Coin(Collectable):
-    pass
+    # Constructor
+    def __init__(self, image_id, location, animation_file_id = None, sound_file = None, tile_size = 16, colorkey = (255, 255, 255)):
+        # Default actor constructor
+        super().__init__(image_id, location, animation_file_id, sound_file, tile_size, colorkey)
 
 # Song class
 class Song(Collectable):
-    pass
+    # Constructor
+    def __init__(self, image_id, location, animation_file_id = None, sound_file = None, tile_size = 16, colorkey = (255, 255, 255), name = None):
+        # Default actor constructor
+        super().__init__(image_id, location, animation_file_id, sound_file, tile_size, colorkey)
+
+        # Extra song constructor
+        self.name = name
 
 
 # ---------------------------------------------------------------------
