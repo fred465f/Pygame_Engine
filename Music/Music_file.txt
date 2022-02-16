@@ -1,1 +1,3 @@
-intense_music Music/intense_music.wav
+1_song Music/intense_music.wav
+2_song Music/intense_music.wav
+3_song Music/intense_music.wav

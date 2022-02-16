@@ -1,4 +1,5 @@
 # Imports
+from dis import dis
 from socket import gaierror
 from inflection import titleize
 import pygame, sys, random, noise, time, math
@@ -98,6 +99,76 @@ class Collectable(Actor):
 class Wind():
     pass
 
+# Parent class for all events
+class Event():
+    # Constructor
+    def __init__(self, event_locs, event_tile_paths, event_song, event_coins, tilesize = 16, colorkey = (255, 255, 255)):
+        self.event_locs = event_locs
+        self.event_tile_paths = event_tile_paths
+        self.event_tile_imgs = []
+        self.event_tile_rects = []
+        self.event_song = event_song
+        self.event_coins = event_coins
+        self.tilesize = tilesize
+        self.colorkey = colorkey
+        self.state = 0
+        self.states = len(self.event_locs) - 1
+
+        # Load tile imgs
+        if len(self.event_tile_imgs) == 0:
+            self.load_tile_imgs()
+
+    # Load tile imgs
+    def load_tile_imgs(self):
+        for i, id in enumerate(self.event_tile_paths):
+            img = pygame.image.load(id)
+            img.set_colorkey(self.colorkey)
+            self.event_tile_imgs.append(img)
+            self.event_tile_rects.append([pygame.Rect(*self.event_locs[i], img.get_width(), img.get_height()), '0'])
+
+    # Render
+    def render(self, display, scroll, rect, shake_timer):
+        collected = False
+        tile_rects = []
+        collide_loc = 0
+        particle_color = None
+        coin_collected = False
+        song_collected = False
+        song = ''
+        if self.state <= self.states:
+            for i in range(self.state + 1):
+                if self.state < (self.states):
+                    self.event_coins[self.state].render(display, scroll)
+                    if self.event_coins[self.state].rect.colliderect(rect):
+                        collected = True
+                        collide_loc = self.event_locs[i]
+                        particle_color = (175, 75, 75)
+                        coin_collected = True
+                if self.state == self.states:
+                    self.event_song.render(display, scroll)
+                    if self.event_song.rect.colliderect(rect):
+                        collected = True
+                        collide_loc = self.event_locs[i]
+                        particle_color = (255, 255, 255)
+                        song_collected = True
+                        song = self.event_song.name
+                if self.state > 0 and i != 0:
+                    tile_rects.append(self.event_tile_rects[i])
+                    loc = self.event_locs[i]
+                    scolled_loc = [loc[0] - scroll[0], loc[1] - scroll[1]]
+                    display.blit(self.event_tile_imgs[i], scolled_loc)
+        if collected:
+            self.state += 1
+        if self.state == (self.states + 1):
+            for i in range(1, self.state):
+                tile_rects.append(self.event_tile_rects[i])
+                loc = self.event_locs[i]
+                scolled_loc = [loc[0] - scroll[0], loc[1] - scroll[1]]
+                display.blit(self.event_tile_imgs[i], scolled_loc)
+            collide_loc = self.event_locs[-1]
+            particle_color = (57, 22, 15)
+        return tile_rects, collide_loc, particle_color, coin_collected, song_collected, song
+
 # Parent class for the game
 class Game():
     # Constructor
@@ -143,11 +214,11 @@ class Game():
             self.music_database[music_id] = music_path
 
     # Function to play music from music_database dictionary
-    def play_music(self, music_id, repeat = -1):
+    def play_music(self, music_id, repeat = -1, new_song = False):
         if not self.music_loaded:
             pygame.mixer.music.load(self.music_database[music_id])
             self.music_loaded = True
-        else:
+        elif self.music_loaded and new_song:
             pygame.mixer.music.unload()
             pygame.mixer.music.load(self.music_database[music_id])
         pygame.mixer.music.play(repeat)
@@ -193,6 +264,13 @@ class Game():
         if self.level_count != 0:
             self.level_count -= 1
         return self.levels[self.level_count]
+    
+    def render_outline(self, img, loc, display, col = (71, 71, 71)):
+        mask = pygame.mask.from_surface(img)
+        mask_outline = mask.outline()
+        for i, point in enumerate(mask_outline):
+            mask_outline[i] = (point[0] + loc[0], point[1] + loc[1])
+        pygame.draw.polygon(display, col, mask_outline, 3)
 
     # Funtion to load dictionary of type {'ui_image': pygame.image, ...}
     def load_ui_images(self):
@@ -206,7 +284,7 @@ class Game():
             self.ui_images[id] = img
 
     # Function to render the UI
-    def render_ui(self, display, font):
+    def render_ui(self, display, font, col = (71, 71, 71)):
         # Render different ui elements
         if self.ui_images != None:
             # Render coins collected
@@ -220,9 +298,11 @@ class Game():
                 for i, song in enumerate(songs):
                     offset = 0
                     if i == self.song_ui_selected:
-                        offset = 5
-                    loc = [int(self.surf_size[0]/(len(songs) + 1) * (i + 1)) - int(song.get_width()/2), self.song_ui_height - offset]
+                        offset = 4
+                    loc = [int(self.surf_size[0]/(len(songs) + 1) * (i + 1)) - int(song.get_width()/1.8), self.song_ui_height - offset]
                     display.blit(song, loc)
+                    if i == self.song_ui_selected:
+                        self.render_outline(song, loc, display, col)
 
                 if (self.song_ui_height >= (self.surf_size[1] - int(songs[0].get_height()) + 5)) and self.song_ui_key_pressed:
                     self.song_ui_height -= self.song_ui_momentum
@@ -310,10 +390,12 @@ class Level():
     def render_collectables(self, display, scroll, rect):
         # Check for collision with rect, if true, remove collectable
         collected = 0
+        loc = 0
         song = None
         for c in self.collectables:
             if c.rect.colliderect(rect):
                 if isinstance(c, Coin):
+                    loc = c.location
                     self.collectables.remove(c)
                     collected += 1
                 elif isinstance(c, Song):
@@ -325,7 +407,7 @@ class Level():
             c.render(display, scroll)
 
         # Return collected collectables
-        return collected, song
+        return collected, song, loc
 
 
 # ---------------------------------------------------------------------
@@ -495,6 +577,7 @@ class Pet(Character):
         self.moving_right = False
         self.air_timer = 0
         self.spawn_found = False
+        self.rect = pygame.Rect(*(self.location[0] + 5, self.location[1] + 10), self.image.get_width(), self.image.get_height())
 
     # Function for moving pet
     def move(self, tiles):
